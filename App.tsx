@@ -95,7 +95,7 @@ const App: React.FC = () => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
-    const files = Array.from(fileList);
+    const files = Array.from(fileList) as File[];
 
     const newPlans: FloorPlan[] = files.map((file) => ({
       id: Date.now() + Math.random(),
