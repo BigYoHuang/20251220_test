@@ -31,12 +31,16 @@ const App: React.FC = () => {
 
   // Viewport
   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 });
+  // Use a ref to track transform for gesture math to avoid stale state in high-freq events
+  const transformRef = useRef<Transform>({ x: 0, y: 0, scale: 1 });
+  
   const [imgDimensions, setImgDimensions] = useState<ImgDimensions>({ width: 0, height: 0 });
   
   // Refs for Touch/Gesture
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
   const lastDistRef = useRef<number | null>(null);
+  const lastCenterRef = useRef<{ x: number; y: number } | null>(null);
 
   // Loupe
   const [isTouching, setIsTouching] = useState(false);
@@ -47,7 +51,7 @@ const App: React.FC = () => {
   const [activeMarker, setActiveMarker] = useState<Partial<Marker> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Form - Updated initial defaults to '0'
+  // Form
   const [formData, setFormData] = useState<MarkerData>({
     floor: '1',
     isMezzanine: false,
@@ -71,7 +75,6 @@ const App: React.FC = () => {
         const savedMarkers = await dbService.getAllMarkers();
 
         if (savedProject && savedProject.floorPlans && savedProject.floorPlans.length > 0) {
-          // Restore Blob URLs
           const restoredPlans = savedProject.floorPlans.map((p: FloorPlan) => ({
             ...p,
             src: URL.createObjectURL(p.file),
@@ -90,15 +93,21 @@ const App: React.FC = () => {
     checkRestore();
   }, []);
 
+  // Reset transform ref when switching plans
+  useEffect(() => {
+    setTransform({ x: 0, y: 0, scale: 1 });
+    transformRef.current = { x: 0, y: 0, scale: 1 };
+  }, [currentPlanIndex]);
+
   // --- Clustering Logic (Merged Markers) ---
   const visibleMarkers = useMemo(() => {
     const planMarkers = markers.filter(m => m.planIndex === currentPlanIndex);
     if (imgDimensions.width === 0 || imgDimensions.height === 0) return [];
 
-    // Define visual box size for collision (approx 22px including border)
-    // Convert px to percentage based on current image dimensions
-    const thresholdX = (22 / imgDimensions.width) * 100;
-    const thresholdY = (22 / imgDimensions.height) * 100;
+    // Increased size logic: Marker size ~26px (1.3x of 20px)
+    // Threshold adjusted to ~29px to account for larger markers
+    const thresholdX = (29 / imgDimensions.width) * 100;
+    const thresholdY = (29 / imgDimensions.height) * 100;
 
     interface Cluster {
       ids: number[];
@@ -108,14 +117,10 @@ const App: React.FC = () => {
     }
 
     const clusters: Cluster[] = [];
-    
-    // Sort by sequence to ensure deterministic grouping (e.g., "28,34" vs "34,28")
     const sortedMarkers = [...planMarkers].sort((a, b) => a.seq - b.seq);
 
     sortedMarkers.forEach(marker => {
-      // Find a cluster this marker overlaps with
       const existing = clusters.find(c => {
-        // Calculate current center of cluster
         const cx = c.sumX / c.ids.length;
         const cy = c.sumY / c.ids.length;
         return Math.abs(cx - marker.x) < thresholdX && Math.abs(cy - marker.y) < thresholdY;
@@ -137,7 +142,7 @@ const App: React.FC = () => {
     });
 
     return clusters.map(c => ({
-      id: c.ids[0], // Use first ID as key
+      id: c.ids[0],
       x: c.sumX / c.ids.length,
       y: c.sumY / c.ids.length,
       label: c.seqs.join(','),
@@ -146,14 +151,12 @@ const App: React.FC = () => {
 
   }, [markers, currentPlanIndex, imgDimensions]);
 
-
   // --- Handlers: Setup ---
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
     const files = Array.from(fileList) as File[];
-
     const newPlans: FloorPlan[] = files.map((file) => ({
       id: Date.now() + Math.random(),
       name: file.name.replace(/\.[^/.]+$/, ''),
@@ -202,7 +205,12 @@ const App: React.FC = () => {
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       const dist = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+      const centerX = (touch1.clientX + touch2.clientX) / 2;
+      const centerY = (touch1.clientY + touch2.clientY) / 2;
+      
       lastDistRef.current = dist;
+      lastCenterRef.current = { x: centerX, y: centerY };
+
     } else if (e.touches.length === 1) {
       if (mode === 'mark') {
         setIsTouching(true);
@@ -215,10 +223,8 @@ const App: React.FC = () => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    // Prevent default behavior handled by CSS (touch-action: none)
-    
     if (e.touches.length === 2) {
-      // --- Improved Center-based Zoom ---
+      // --- Simultaneous Pan & Zoom ---
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       
@@ -226,21 +232,34 @@ const App: React.FC = () => {
       const midX = (touch1.clientX + touch2.clientX) / 2;
       const midY = (touch1.clientY + touch2.clientY) / 2;
 
-      if (!lastDistRef.current) {
+      // Initialize refs if starting gesture mid-stream
+      if (!lastDistRef.current || !lastCenterRef.current) {
         lastDistRef.current = dist;
+        lastCenterRef.current = { x: midX, y: midY };
         return;
       }
 
+      const currentT = transformRef.current;
       const scaleFactor = dist / lastDistRef.current;
-      const rawNewScale = transform.scale * scaleFactor;
-      const newScale = Math.min(Math.max(rawNewScale, 0.1), 20);
-      const effectiveFactor = newScale / transform.scale;
+      
+      let newScale = currentT.scale * scaleFactor;
+      newScale = Math.min(Math.max(newScale, 0.1), 20);
+      
+      const effectiveScaleFactor = newScale / currentT.scale;
 
-      const newX = midX - (midX - transform.x) * effectiveFactor;
-      const newY = midY - (midY - transform.y) * effectiveFactor;
+      // Calculate new position:
+      // We want the point on the image that was under the OLD center to move to the NEW center.
+      // NewPos = NewCenter - (OldCenter - OldPos) * (NewScale / OldScale)
+      const newX = midX - (lastCenterRef.current.x - currentT.x) * effectiveScaleFactor;
+      const newY = midY - (lastCenterRef.current.y - currentT.y) * effectiveScaleFactor;
 
-      setTransform({ x: newX, y: newY, scale: newScale });
+      const newTransform = { x: newX, y: newY, scale: newScale };
+      
+      setTransform(newTransform);
+      transformRef.current = newTransform;
+      
       lastDistRef.current = dist;
+      lastCenterRef.current = { x: midX, y: midY };
 
     } else if (e.touches.length === 1) {
       if (mode === 'mark' && isTouching) {
@@ -251,7 +270,12 @@ const App: React.FC = () => {
         if (last) {
           const dx = touch.clientX - last.x;
           const dy = touch.clientY - last.y;
-          setTransform((prev) => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+          
+          const currentT = transformRef.current;
+          const newTransform = { ...currentT, x: currentT.x + dx, y: currentT.y + dy };
+          
+          setTransform(newTransform);
+          transformRef.current = newTransform;
           lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
         }
       }
@@ -261,6 +285,8 @@ const App: React.FC = () => {
   const handleTouchEnd = () => {
     lastDistRef.current = null;
     lastTouchRef.current = null;
+    lastCenterRef.current = null;
+
     if (mode === 'mark' && isTouching) {
       setIsTouching(false);
       if (imgCoord.x !== null && imgCoord.y !== null) {
@@ -276,8 +302,9 @@ const App: React.FC = () => {
     const touchY = touch.clientY - rect.top;
     setTouchPos({ x: touchX, y: touchY });
 
-    const rawX = (touchX - transform.x) / transform.scale;
-    const rawY = (touchY - transform.y) / transform.scale;
+    const currentT = transformRef.current;
+    const rawX = (touchX - currentT.x) / currentT.scale;
+    const rawY = (touchY - currentT.y) / currentT.scale;
 
     if (
       rawX >= 0 &&
@@ -307,7 +334,6 @@ const App: React.FC = () => {
       seq: nextSeq,
     });
 
-    // Reset Form Data for new marker, defaulting codes to '0'
     setFormData((prev) => ({
       ...prev,
       location: '',
@@ -378,13 +404,11 @@ const App: React.FC = () => {
     const photosFolder = mainFolder.folder('photos');
     const mapsFolder = mainFolder.folder('maps');
 
-    // 1. Photos
     markers.forEach((m) => {
       const fileName = getMarkerFileName(m) + '.jpg';
       photosFolder.file(fileName, m.imageBlob);
     });
 
-    // 2. Maps
     const uniquePlansIndices = [...new Set(markers.map((m) => m.planIndex))];
     const loadImage = (src: string): Promise<HTMLImageElement> =>
       new Promise((resolve, reject) => {
@@ -411,7 +435,9 @@ const App: React.FC = () => {
           planMarkers.forEach((m) => {
             const x = (m.x / 100) * canvas.width;
             const y = (m.y / 100) * canvas.height;
-            const size = Math.max(24, canvas.width * 0.015);
+            // Draw marker on exported image (scale size appropriately?)
+            // Using slightly larger size for readability on export
+            const size = Math.max(30, canvas.width * 0.02);
 
             ctx.fillStyle = '#FFFF00';
             ctx.strokeStyle = '#FF0000';
@@ -449,7 +475,6 @@ const App: React.FC = () => {
     link.click();
     document.body.removeChild(link);
 
-    // Wait 500ms to ensure the download actually starts before prompting to clear
     setTimeout(async () => {
       if (
         confirm(
@@ -485,7 +510,6 @@ const App: React.FC = () => {
     );
   }
 
-  // WORKSPACE RENDER
   const currentPlan = projectInfo.floorPlans[currentPlanIndex];
 
   return (
@@ -501,7 +525,6 @@ const App: React.FC = () => {
               value={currentPlanIndex}
               onChange={(e) => {
                 setCurrentPlanIndex(Number(e.target.value));
-                setTransform({ x: 0, y: 0, scale: 1 });
               }}
               className="font-bold text-lg bg-transparent pr-6 outline-none appearance-none truncate max-w-[200px]"
             >
@@ -555,15 +578,17 @@ const App: React.FC = () => {
                 const containerW = containerRef.current.clientWidth;
                 const scale = containerW / imgW;
                 setTransform({ x: 0, y: 0, scale });
+                transformRef.current = { x: 0, y: 0, scale };
               }
             }}
           />
           {/* Markers Layer (Using Clustered Markers) */}
+          {/* Size Increased: min-w-[1.625rem] (26px), text-[13px] */}
           {visibleMarkers.map((m) => (
               <div
                 key={m.id}
                 style={{ left: `${m.x}%`, top: `${m.y}%` }}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-[1.25rem] h-5 px-1 bg-yellow-400 border border-red-600 flex items-center justify-center text-[10px] font-bold text-black shadow-sm z-10 whitespace-nowrap`}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-[1.625rem] h-[1.625rem] px-1 bg-yellow-400 border border-red-600 flex items-center justify-center text-[13px] font-bold text-black shadow-sm z-10 whitespace-nowrap`}
               >
                 {m.label}
               </div>
@@ -604,12 +629,12 @@ const App: React.FC = () => {
                     maxWidth: 'none',
                   }}
                 />
-                {/* Render markers inside loupe */}
+                {/* Render markers inside loupe with larger size */}
                 {visibleMarkers.map((m) => (
                   <div
                     key={`loupe-${m.id}`}
                     style={{ left: `${m.x}%`, top: `${m.y}%` }}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-[1.25rem] h-5 px-1 bg-yellow-400 border border-red-600 flex items-center justify-center text-[10px] font-bold text-black shadow-sm whitespace-nowrap`}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-[1.625rem] h-[1.625rem] px-1 bg-yellow-400 border border-red-600 flex items-center justify-center text-[13px] font-bold text-black shadow-sm whitespace-nowrap`}
                   >
                     {m.label}
                   </div>
