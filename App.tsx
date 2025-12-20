@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Download, ChevronDown, Move, MousePointer2 } from 'lucide-react';
 import useJSZip from './hooks/useJSZip';
 import dbService from './services/dbService';
@@ -47,15 +47,15 @@ const App: React.FC = () => {
   const [activeMarker, setActiveMarker] = useState<Partial<Marker> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Form
+  // Form - Updated initial defaults to '0'
   const [formData, setFormData] = useState<MarkerData>({
     floor: '1',
     isMezzanine: false,
     location: '',
-    code1: '2',
-    code2: '1',
+    code1: '0',
+    code2: '0',
     code3: '0',
-    code4: '1',
+    code4: '0',
     code6: '0',
     length: '0',
     width: '0',
@@ -89,6 +89,63 @@ const App: React.FC = () => {
     };
     checkRestore();
   }, []);
+
+  // --- Clustering Logic (Merged Markers) ---
+  const visibleMarkers = useMemo(() => {
+    const planMarkers = markers.filter(m => m.planIndex === currentPlanIndex);
+    if (imgDimensions.width === 0 || imgDimensions.height === 0) return [];
+
+    // Define visual box size for collision (approx 22px including border)
+    // Convert px to percentage based on current image dimensions
+    const thresholdX = (22 / imgDimensions.width) * 100;
+    const thresholdY = (22 / imgDimensions.height) * 100;
+
+    interface Cluster {
+      ids: number[];
+      seqs: number[];
+      sumX: number;
+      sumY: number;
+    }
+
+    const clusters: Cluster[] = [];
+    
+    // Sort by sequence to ensure deterministic grouping (e.g., "28,34" vs "34,28")
+    const sortedMarkers = [...planMarkers].sort((a, b) => a.seq - b.seq);
+
+    sortedMarkers.forEach(marker => {
+      // Find a cluster this marker overlaps with
+      const existing = clusters.find(c => {
+        // Calculate current center of cluster
+        const cx = c.sumX / c.ids.length;
+        const cy = c.sumY / c.ids.length;
+        return Math.abs(cx - marker.x) < thresholdX && Math.abs(cy - marker.y) < thresholdY;
+      });
+
+      if (existing) {
+        existing.ids.push(marker.id);
+        existing.seqs.push(marker.seq);
+        existing.sumX += marker.x;
+        existing.sumY += marker.y;
+      } else {
+        clusters.push({
+          ids: [marker.id],
+          seqs: [marker.seq],
+          sumX: marker.x,
+          sumY: marker.y
+        });
+      }
+    });
+
+    return clusters.map(c => ({
+      id: c.ids[0], // Use first ID as key
+      x: c.sumX / c.ids.length,
+      y: c.sumY / c.ids.length,
+      label: c.seqs.join(','),
+      isCluster: c.ids.length > 1
+    }));
+
+  }, [markers, currentPlanIndex, imgDimensions]);
+
 
   // --- Handlers: Setup ---
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -165,10 +222,7 @@ const App: React.FC = () => {
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       
-      // 1. Calculate new distance
       const dist = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
-      
-      // 2. Calculate center point of the two fingers
       const midX = (touch1.clientX + touch2.clientX) / 2;
       const midY = (touch1.clientY + touch2.clientY) / 2;
 
@@ -177,19 +231,11 @@ const App: React.FC = () => {
         return;
       }
 
-      // 3. Calculate Scale Factor
       const scaleFactor = dist / lastDistRef.current;
-      
-      // 4. Calculate New Scale (with limits)
       const rawNewScale = transform.scale * scaleFactor;
       const newScale = Math.min(Math.max(rawNewScale, 0.1), 20);
-      
-      // 5. Re-calculate effective factor (in case we hit limits)
       const effectiveFactor = newScale / transform.scale;
 
-      // 6. Calculate New Position
-      // Logic: The point under the center of fingers (midX, midY) should remain stationary relative to the screen.
-      // NewPos = MousePos - (MousePos - OldPos) * (NewScale / OldScale)
       const newX = midX - (midX - transform.x) * effectiveFactor;
       const newY = midY - (midY - transform.y) * effectiveFactor;
 
@@ -261,11 +307,17 @@ const App: React.FC = () => {
       seq: nextSeq,
     });
 
+    // Reset Form Data for new marker, defaulting codes to '0'
     setFormData((prev) => ({
       ...prev,
       location: '',
       length: '0',
       width: '0',
+      code1: '0',
+      code2: '0',
+      code3: '0',
+      code4: '0',
+      code6: '0',
       tempImage: null,
     }));
 
@@ -506,16 +558,14 @@ const App: React.FC = () => {
               }
             }}
           />
-          {/* Markers Layer */}
-          {markers
-            .filter((m) => m.planIndex === currentPlanIndex)
-            .map((m) => (
+          {/* Markers Layer (Using Clustered Markers) */}
+          {visibleMarkers.map((m) => (
               <div
                 key={m.id}
                 style={{ left: `${m.x}%`, top: `${m.y}%` }}
-                className="absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-yellow-400 border border-red-600 flex items-center justify-center text-[10px] font-bold text-black shadow-sm z-10"
+                className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-[1.25rem] h-5 px-1 bg-yellow-400 border border-red-600 flex items-center justify-center text-[10px] font-bold text-black shadow-sm z-10 whitespace-nowrap`}
               >
-                {m.seq}
+                {m.label}
               </div>
             ))}
         </div>
@@ -532,22 +582,42 @@ const App: React.FC = () => {
             }}
           >
             <div className="relative w-full h-full overflow-hidden bg-black">
-              <img
-                src={currentPlan.src}
-                alt="magnified"
+              {/* Inner container to move both image and markers together */}
+              <div
                 style={{
                   position: 'absolute',
                   left: 0,
                   top: 0,
-                  maxWidth: 'none',
                   width: imgDimensions.width * 2,
                   height: imgDimensions.height * 2,
                   transform: `translate(${-(imgCoord.x || 0) * 2 + 70}px, ${
                     -(imgCoord.y || 0) * 2 + 70
                   }px)`,
                 }}
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
+              >
+                <img
+                  src={currentPlan.src}
+                  alt="magnified"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    maxWidth: 'none',
+                  }}
+                />
+                {/* Render markers inside loupe */}
+                {visibleMarkers.map((m) => (
+                  <div
+                    key={`loupe-${m.id}`}
+                    style={{ left: `${m.x}%`, top: `${m.y}%` }}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-[1.25rem] h-5 px-1 bg-yellow-400 border border-red-600 flex items-center justify-center text-[10px] font-bold text-black shadow-sm whitespace-nowrap`}
+                  >
+                    {m.label}
+                  </div>
+                ))}
+              </div>
+
+              {/* Crosshair */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="w-0.5 h-6 bg-red-500/80 absolute"></div>
                 <div className="w-6 h-0.5 bg-red-500/80 absolute"></div>
                 <div className="w-2 h-2 border border-red-500 rounded-full absolute"></div>
