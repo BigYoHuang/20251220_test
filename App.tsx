@@ -139,16 +139,13 @@ const App: React.FC = () => {
   };
 
   // --- Handlers: Canvas Interaction ---
-  const getDistance = (touches: React.TouchList) => {
-    return Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-  };
-
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      // Pinch start - prevent browser zoom if possible via CSS, but handle logic here
+      // Pinch start
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const dist = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+      lastDistRef.current = dist;
     } else if (e.touches.length === 1) {
       if (mode === 'mark') {
         setIsTouching(true);
@@ -161,20 +158,44 @@ const App: React.FC = () => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    // Prevent default to stop scrolling
-    // e.preventDefault(); // Note: React synthetic events can't preventDefault in some cases if not passive. 
-    // We handle overscroll-behavior in CSS.
-
+    // Prevent default behavior handled by CSS (touch-action: none)
+    
     if (e.touches.length === 2) {
-      const dist = getDistance(e.touches);
+      // --- Improved Center-based Zoom ---
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      
+      // 1. Calculate new distance
+      const dist = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+      
+      // 2. Calculate center point of the two fingers
+      const midX = (touch1.clientX + touch2.clientX) / 2;
+      const midY = (touch1.clientY + touch2.clientY) / 2;
+
       if (!lastDistRef.current) {
         lastDistRef.current = dist;
         return;
       }
+
+      // 3. Calculate Scale Factor
       const scaleFactor = dist / lastDistRef.current;
-      const newScale = Math.min(Math.max(transform.scale * scaleFactor, 0.2), 10);
-      setTransform((prev) => ({ ...prev, scale: newScale }));
+      
+      // 4. Calculate New Scale (with limits)
+      const rawNewScale = transform.scale * scaleFactor;
+      const newScale = Math.min(Math.max(rawNewScale, 0.1), 20);
+      
+      // 5. Re-calculate effective factor (in case we hit limits)
+      const effectiveFactor = newScale / transform.scale;
+
+      // 6. Calculate New Position
+      // Logic: The point under the center of fingers (midX, midY) should remain stationary relative to the screen.
+      // NewPos = MousePos - (MousePos - OldPos) * (NewScale / OldScale)
+      const newX = midX - (midX - transform.x) * effectiveFactor;
+      const newY = midY - (midY - transform.y) * effectiveFactor;
+
+      setTransform({ x: newX, y: newY, scale: newScale });
       lastDistRef.current = dist;
+
     } else if (e.touches.length === 1) {
       if (mode === 'mark' && isTouching) {
         updateLoupe(e.touches[0]);
@@ -376,14 +397,17 @@ const App: React.FC = () => {
     link.click();
     document.body.removeChild(link);
 
-    if (
-      confirm(
-        '匯出成功！是否要清除暫存資料並結束此專案？(若還需要繼續編輯請按取消)'
-      )
-    ) {
-      await dbService.clearAll();
-      window.location.reload();
-    }
+    // Wait 500ms to ensure the download actually starts before prompting to clear
+    setTimeout(async () => {
+      if (
+        confirm(
+          '匯出成功！是否要清除暫存資料並結束此專案？(若還需要繼續編輯請按取消)'
+        )
+      ) {
+        await dbService.clearAll();
+        window.location.reload();
+      }
+    }, 500);
   };
 
   // --- RENDER ---
