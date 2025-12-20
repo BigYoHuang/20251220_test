@@ -17,7 +17,7 @@ const generateFloorOptions = () => {
 
 const FLOOR_OPTIONS = generateFloorOptions();
 const NUMBER_OPTIONS = Array.from({ length: 189 }, (_, i) => i);
-const Y_OFFSET = 60; // Offset in pixels (aiming above finger)
+const Y_OFFSET = 30; // Offset in pixels (aiming above finger)
 
 const App: React.FC = () => {
   const isZipLoaded = useJSZip();
@@ -334,7 +334,7 @@ const App: React.FC = () => {
     const touchY = pos.clientY - rect.top;
     setTouchPos({ x: touchX, y: touchY });
 
-    // Logic Position: Aim 60px ABOVE the finger
+    // Logic Position: Aim 30px ABOVE the finger
     const effectiveY = touchY - Y_OFFSET;
 
     const currentT = transformRef.current;
