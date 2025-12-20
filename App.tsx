@@ -17,6 +17,7 @@ const generateFloorOptions = () => {
 
 const FLOOR_OPTIONS = generateFloorOptions();
 const NUMBER_OPTIONS = Array.from({ length: 189 }, (_, i) => i);
+const Y_OFFSET = 60; // Offset in pixels (aiming above finger)
 
 const App: React.FC = () => {
   const isZipLoaded = useJSZip();
@@ -41,6 +42,10 @@ const App: React.FC = () => {
   const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
   const lastDistRef = useRef<number | null>(null);
   const lastCenterRef = useRef<{ x: number; y: number } | null>(null);
+  
+  // Ref for Mark Delay
+  const markTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentFingerPosRef = useRef<{ clientX: number; clientY: number } | null>(null);
 
   // Loupe
   const [isTouching, setIsTouching] = useState(false);
@@ -201,6 +206,13 @@ const App: React.FC = () => {
   // --- Handlers: Canvas Interaction ---
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
+      // If we were waiting to mark, cancel it immediately
+      if (markTimeoutRef.current) {
+        clearTimeout(markTimeoutRef.current);
+        markTimeoutRef.current = null;
+      }
+      setIsTouching(false);
+
       // Pinch start
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
@@ -212,11 +224,21 @@ const App: React.FC = () => {
       lastCenterRef.current = { x: centerX, y: centerY };
 
     } else if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      
       if (mode === 'mark') {
-        setIsTouching(true);
-        updateLoupe(e.touches[0]);
+        // Start a delay before activating mark mode to distinguish from pinch start
+        currentFingerPosRef.current = { clientX: touch.clientX, clientY: touch.clientY };
+        
+        markTimeoutRef.current = setTimeout(() => {
+          setIsTouching(true);
+          // Use the latest tracked position (from move) or the initial start position
+          const pos = currentFingerPosRef.current || { clientX: touch.clientX, clientY: touch.clientY };
+          // We must reconstruct a mock touch object or adjust updateLoupe to accept coords
+          updateLoupe(pos); 
+        }, 100); // 100ms tolerance
+
       } else {
-        const touch = e.touches[0];
         lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
       }
     }
@@ -247,9 +269,6 @@ const App: React.FC = () => {
       
       const effectiveScaleFactor = newScale / currentT.scale;
 
-      // Calculate new position:
-      // We want the point on the image that was under the OLD center to move to the NEW center.
-      // NewPos = NewCenter - (OldCenter - OldPos) * (NewScale / OldScale)
       const newX = midX - (lastCenterRef.current.x - currentT.x) * effectiveScaleFactor;
       const newY = midY - (lastCenterRef.current.y - currentT.y) * effectiveScaleFactor;
 
@@ -262,10 +281,15 @@ const App: React.FC = () => {
       lastCenterRef.current = { x: midX, y: midY };
 
     } else if (e.touches.length === 1) {
-      if (mode === 'mark' && isTouching) {
-        updateLoupe(e.touches[0]);
+      const touch = e.touches[0];
+      
+      if (mode === 'mark') {
+        currentFingerPosRef.current = { clientX: touch.clientX, clientY: touch.clientY };
+        // Only update if the timeout has fired and we are officially "touching/marking"
+        if (isTouching) {
+          updateLoupe({ clientX: touch.clientX, clientY: touch.clientY });
+        }
       } else if (mode === 'move') {
-        const touch = e.touches[0];
         const last = lastTouchRef.current;
         if (last) {
           const dx = touch.clientX - last.x;
@@ -283,6 +307,12 @@ const App: React.FC = () => {
   };
 
   const handleTouchEnd = () => {
+    // Clear timeout if user lifts finger before 100ms
+    if (markTimeoutRef.current) {
+      clearTimeout(markTimeoutRef.current);
+      markTimeoutRef.current = null;
+    }
+
     lastDistRef.current = null;
     lastTouchRef.current = null;
     lastCenterRef.current = null;
@@ -295,16 +325,21 @@ const App: React.FC = () => {
     }
   };
 
-  const updateLoupe = (touch: React.Touch) => {
+  const updateLoupe = (pos: { clientX: number; clientY: number }) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const touchX = touch.clientX - rect.left;
-    const touchY = touch.clientY - rect.top;
+    
+    // UI Position: Follow the finger exactly (so the circle sits on top of finger)
+    const touchX = pos.clientX - rect.left;
+    const touchY = pos.clientY - rect.top;
     setTouchPos({ x: touchX, y: touchY });
+
+    // Logic Position: Aim 60px ABOVE the finger
+    const effectiveY = touchY - Y_OFFSET;
 
     const currentT = transformRef.current;
     const rawX = (touchX - currentT.x) / currentT.scale;
-    const rawY = (touchY - currentT.y) / currentT.scale;
+    const rawY = (effectiveY - currentT.y) / currentT.scale;
 
     if (
       rawX >= 0 &&
@@ -615,6 +650,7 @@ const App: React.FC = () => {
                   top: 0,
                   width: imgDimensions.width * 2,
                   height: imgDimensions.height * 2,
+                  // Apply Y_OFFSET compensation to the image inside the loupe too so the center crosshair aligns
                   transform: `translate(${-(imgCoord.x || 0) * 2 + 70}px, ${
                     -(imgCoord.y || 0) * 2 + 70
                   }px)`,
