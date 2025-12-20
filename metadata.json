@@ -1,0 +1,7 @@
+{
+  "name": "Site Photo Logger",
+  "description": "A professional construction site photo logging application allowing users to mark locations on floor plans, take photos, and export structured data.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
