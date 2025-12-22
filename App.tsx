@@ -4,6 +4,7 @@ import useJSZip from './hooks/useJSZip';
 import dbService from './services/dbService';
 import SetupScreen from './components/SetupScreen';
 import MarkerModal from './components/MarkerModal';
+import ClusterSelectModal from './components/ClusterSelectModal';
 import { ProjectInfo, FloorPlan, Marker, Transform, ImgDimensions, MarkerData } from './types';
 
 // --- Options Helpers ---
@@ -55,6 +56,12 @@ const App: React.FC = () => {
   // Modal
   const [activeMarker, setActiveMarker] = useState<Partial<Marker> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Cluster Selection Modal
+  const [clusterModalState, setClusterModalState] = useState<{ isOpen: boolean; markers: Marker[] }>({
+    isOpen: false,
+    markers: [],
+  });
 
   // Form
   const [formData, setFormData] = useState<MarkerData>({
@@ -153,7 +160,8 @@ const App: React.FC = () => {
     });
 
     return clusters.map(c => ({
-      id: c.ids[0],
+      id: c.ids[0], // Primary ID for key
+      allIds: c.ids, // All IDs in this cluster for selection
       x: c.sumX / c.ids.length,
       y: c.sumY / c.ids.length,
       label: c.seqs.join(','),
@@ -360,22 +368,20 @@ const App: React.FC = () => {
   };
 
   // --- Handlers: Marker & Form ---
-  const handleMarkerClick = (e: React.MouseEvent<HTMLDivElement>, markerId: number) => {
-    // Stop event bubbling to prevent canvas interactions or double triggering
-    e.stopPropagation();
-
-    // Only allow editing in 'move' mode
-    if (mode !== 'move') return;
-
-    const targetMarker = markers.find(m => m.id === markerId);
-    if (!targetMarker) return;
-
-    setActiveMarker(targetMarker);
+  const handleMarkerClick = (marker: Marker) => {
+    // This function now directly opens the modal for a specific marker
+    setActiveMarker(marker);
     setFormData({ 
-      ...targetMarker.data, 
-      tempImage: targetMarker.imageBlob 
+      ...marker.data, 
+      tempImage: marker.imageBlob 
     });
     setIsModalOpen(true);
+  };
+
+  // Called when a selection is made in the cluster modal
+  const handleClusterSelect = (marker: Marker) => {
+    setClusterModalState((prev) => ({ ...prev, isOpen: false }));
+    handleMarkerClick(marker);
   };
 
   const openNewMarkerModal = (coord: { x: number; y: number }) => {
@@ -660,9 +666,21 @@ const App: React.FC = () => {
                 key={m.id}
                 style={{ left: `${m.x}%`, top: `${m.y}%` }}
                 onClick={(e) => {
-                  // Only allow editing if it is a single marker (not a cluster)
-                  if (!m.isCluster) {
-                    handleMarkerClick(e, m.id);
+                  e.stopPropagation();
+                  // Check mode
+                  if (mode !== 'move') return;
+
+                  if (m.isCluster) {
+                    // It's a cluster: open selection modal
+                    // Find actual marker objects
+                    const clusterMarkers = markers.filter(marker => m.allIds.includes(marker.id));
+                    // Sort by seq for better UX
+                    clusterMarkers.sort((a, b) => a.seq - b.seq);
+                    setClusterModalState({ isOpen: true, markers: clusterMarkers });
+                  } else {
+                    // Single marker: find and open directly
+                    const target = markers.find(marker => marker.id === m.id);
+                    if (target) handleMarkerClick(target);
                   }
                 }}
                 className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-[1.625rem] h-[1.625rem] px-1 bg-yellow-400 border border-red-600 flex items-center justify-center text-[13px] font-bold text-black shadow-sm z-10 whitespace-nowrap`}
@@ -760,6 +778,14 @@ const App: React.FC = () => {
           <span className="text-xs font-bold">選取位置 (按住)</span>
         </button>
       </div>
+
+      {/* Cluster Select Modal */}
+      <ClusterSelectModal
+        isOpen={clusterModalState.isOpen}
+        onClose={() => setClusterModalState(prev => ({ ...prev, isOpen: false }))}
+        markers={clusterModalState.markers}
+        onSelect={handleClusterSelect}
+      />
 
       {/* Modal */}
       <MarkerModal
