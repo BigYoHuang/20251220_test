@@ -12,6 +12,7 @@ interface MarkerModalProps {
   onPhotoCapture: (e: React.ChangeEvent<HTMLInputElement>) => void;
   FLOOR_OPTIONS: string[];
   NUMBER_OPTIONS: number[];
+  isEditing?: boolean;
 }
 
 const MarkerModal: React.FC<MarkerModalProps> = ({
@@ -24,6 +25,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
   onPhotoCapture,
   FLOOR_OPTIONS,
   NUMBER_OPTIONS,
+  isEditing = false,
 }) => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,7 +41,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             <div className="bg-yellow-400 border border-red-600 w-8 h-8 flex items-center justify-center font-bold rounded text-sm">
               {activeMarker?.seq}
             </div>
-            <h3 className="font-bold text-lg text-gray-800">新增紀錄</h3>
+            <h3 className="font-bold text-lg text-gray-800">{isEditing ? '編輯紀錄' : '新增紀錄'}</h3>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
             <X />

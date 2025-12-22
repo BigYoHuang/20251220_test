@@ -72,6 +72,11 @@ const App: React.FC = () => {
     tempImage: null,
   });
 
+  // Check if we are editing an existing marker
+  const isEditing = useMemo(() => {
+    return activeMarker && markers.some(m => m.id === activeMarker.id);
+  }, [activeMarker, markers]);
+
   // --- 1. Initialization & Restore Logic ---
   useEffect(() => {
     const checkRestore = async () => {
@@ -355,6 +360,24 @@ const App: React.FC = () => {
   };
 
   // --- Handlers: Marker & Form ---
+  const handleMarkerClick = (e: React.MouseEvent<HTMLDivElement>, markerId: number) => {
+    // Stop event bubbling to prevent canvas interactions or double triggering
+    e.stopPropagation();
+
+    // Only allow editing in 'move' mode
+    if (mode !== 'move') return;
+
+    const targetMarker = markers.find(m => m.id === markerId);
+    if (!targetMarker) return;
+
+    setActiveMarker(targetMarker);
+    setFormData({ 
+      ...targetMarker.data, 
+      tempImage: targetMarker.imageBlob 
+    });
+    setIsModalOpen(true);
+  };
+
   const openNewMarkerModal = (coord: { x: number; y: number }) => {
     const maxSeq = markers.reduce((max, m) => Math.max(max, m.seq), 0);
     const nextSeq = maxSeq + 1;
@@ -412,8 +435,18 @@ const App: React.FC = () => {
       imageBlob: formData.tempImage,
     };
 
-    setMarkers((prev) => [...prev, newMarker]);
+    // If marker exists (by ID), update it. Otherwise, add new.
+    const isUpdate = markers.some(m => m.id === newMarker.id);
+
+    if (isUpdate) {
+      setMarkers((prev) => prev.map(m => m.id === newMarker.id ? newMarker : m));
+    } else {
+      setMarkers((prev) => [...prev, newMarker]);
+    }
+
+    // dbService.addMarker uses 'put', so it acts as upsert (update if key exists)
     await dbService.addMarker(newMarker);
+    
     setIsModalOpen(false);
     setActiveMarker(null);
     setMode('move');
@@ -426,7 +459,8 @@ const App: React.FC = () => {
     if (d.isMezzanine) floorStr = `${d.floor}M`;
     floorStr += 'F';
     const seqStr = String(m.seq).padStart(3, '0');
-    return `${seqStr}_${floorStr}_${d.location}_${d.code1}_${d.code2}_${d.code3}_${d.code4}_${d.code6}_${d.length}_${d.width}`;
+    // Added surfaceType to the end of filename
+    return `${seqStr}_${floorStr}_${d.location}_${d.code1}_${d.code2}_${d.code3}_${d.code4}_${d.code6}_${d.length}_${d.width}_${d.surfaceType}`;
   };
 
   const handleExport = async () => {
@@ -625,6 +659,12 @@ const App: React.FC = () => {
               <div
                 key={m.id}
                 style={{ left: `${m.x}%`, top: `${m.y}%` }}
+                onClick={(e) => {
+                  // Only allow editing if it is a single marker (not a cluster)
+                  if (!m.isCluster) {
+                    handleMarkerClick(e, m.id);
+                  }
+                }}
                 className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-[1.625rem] h-[1.625rem] px-1 bg-yellow-400 border border-red-600 flex items-center justify-center text-[13px] font-bold text-black shadow-sm z-10 whitespace-nowrap`}
               >
                 {m.label}
@@ -732,6 +772,7 @@ const App: React.FC = () => {
         onPhotoCapture={handlePhotoCapture}
         FLOOR_OPTIONS={FLOOR_OPTIONS}
         NUMBER_OPTIONS={NUMBER_OPTIONS}
+        isEditing={!!isEditing}
       />
     </div>
   );
