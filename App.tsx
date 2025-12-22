@@ -61,6 +61,7 @@ const App: React.FC = () => {
     floor: '1',
     isMezzanine: false,
     location: '',
+    surfaceType: '雙面',
     code1: '0',
     code2: '0',
     code3: '0',
@@ -372,6 +373,7 @@ const App: React.FC = () => {
     setFormData((prev) => ({
       ...prev,
       location: '',
+      surfaceType: '雙面',
       length: '0',
       width: '0',
       code1: '0',

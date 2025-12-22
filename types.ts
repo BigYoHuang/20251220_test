@@ -15,6 +15,7 @@ export interface MarkerData {
   floor: string;
   isMezzanine: boolean;
   location: string;
+  surfaceType: string;
   code1: string;
   code2: string;
   code3: string;

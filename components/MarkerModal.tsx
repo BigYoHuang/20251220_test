@@ -48,10 +48,10 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
 
         {/* Content */}
         <div className="p-5 space-y-5">
-          {/* Photo Capture */}
+          {/* Photo Capture (Reduced Height) */}
           <div
             onClick={() => cameraInputRef.current?.click()}
-            className={`w-full aspect-[4/3] rounded-xl flex items-center justify-center cursor-pointer border-2 transition-all ${
+            className={`w-full h-36 rounded-xl flex items-center justify-center cursor-pointer border-2 transition-all ${
               formData.tempImage
                 ? 'border-green-500 border-solid bg-green-50'
                 : 'border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100'
@@ -69,9 +69,9 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center text-gray-400">
-                <div className="bg-white p-4 rounded-full shadow-sm mb-3">
-                  <Camera size={32} className="text-blue-500" />
+              <div className="flex flex-row items-center justify-center gap-3 text-gray-400">
+                <div className="bg-white p-2 rounded-full shadow-sm">
+                  <Camera size={24} className="text-blue-500" />
                 </div>
                 <span className="font-bold text-gray-500">點擊開啟相機</span>
               </div>
@@ -165,6 +165,26 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
                 onChange={(e) => setFormData({ ...formData, width: e.target.value })}
                 className="w-full border-gray-300 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
+            </div>
+          </div>
+
+          {/* New Surface Type Toggle */}
+          <div>
+            <label className="text-xs text-gray-500 font-bold block mb-1.5">施作面</label>
+            <div className="grid grid-cols-3 gap-2">
+              {['雙面', '腳踩面', '倒吊面'].map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setFormData({ ...formData, surfaceType: type })}
+                  className={`py-3 rounded-lg font-bold text-sm transition-all border ${
+                    formData.surfaceType === type
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
             </div>
           </div>
 
