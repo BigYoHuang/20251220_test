@@ -676,7 +676,8 @@ const App: React.FC = () => {
       {/* 畫布區域 */}
       <div
         ref={containerRef}
-        className="flex-1 relative overflow-hidden bg-[#2a2a2a] touch-none"
+        className="flex-1 relative overflow-hidden bg-[#2a2a2a] touch-none select-none"
+        onContextMenu={(e) => e.preventDefault()}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
