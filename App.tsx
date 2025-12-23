@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Download, ChevronDown, Move, MousePointer2, Save, LogOut } from 'lucide-react';
+import { Download, ChevronDown, Move, MousePointer2, Save, LogOut, PlusCircle } from 'lucide-react';
 import useJSZip from './hooks/useJSZip';
 import usePDFJS from './hooks/usePDFJS'; // 新增 Hook
 import dbService from './services/dbService';
 import SetupScreen from './components/SetupScreen';
 import MarkerModal from './components/MarkerModal';
 import ClusterSelectModal from './components/ClusterSelectModal';
+import AddPlanModal from './components/AddPlanModal'; // 新增 Modal
 import { ProjectInfo, FloorPlan, Marker, Transform, ImgDimensions, MarkerData } from './types';
 
 // --- 選項產生輔助函式 ---
@@ -66,6 +67,7 @@ const App: React.FC = () => {
   const [activeMarker, setActiveMarker] = useState<Partial<Marker> | null>(null); // 當前正在編輯/新增的標記
   const [isModalOpen, setIsModalOpen] = useState(false); // 標記編輯視窗開關
   const [showExitDialog, setShowExitDialog] = useState(false); // 是否顯示退出確認視窗
+  const [showAddPlanModal, setShowAddPlanModal] = useState(false); // 是否顯示新增平面圖視窗
   
   // --- 聚合選擇視窗狀態 ---
   const [clusterModalState, setClusterModalState] = useState<{ isOpen: boolean; markers: Marker[] }>({
@@ -212,6 +214,26 @@ const App: React.FC = () => {
       ...prev,
       floorPlans: [...prev.floorPlans, ...newPlans],
     }));
+  };
+
+  // --- 新增平面圖 (Workspace 內) ---
+  const handleAddPlanInWorkspace = async (newPlans: FloorPlan[]) => {
+    const updatedProjectInfo = {
+      ...projectInfo,
+      floorPlans: [...projectInfo.floorPlans, ...newPlans],
+    };
+    
+    // 更新 State
+    setProjectInfo(updatedProjectInfo);
+    
+    // 更新 IndexedDB
+    await dbService.saveProject(updatedProjectInfo);
+    
+    // 切換到新加入的第一張圖 (選擇性)
+    if (newPlans.length > 0) {
+      const newIndex = projectInfo.floorPlans.length; // 原本的長度就是新加入第一張的索引
+      setCurrentPlanIndex(newIndex);
+    }
   };
 
 
@@ -811,22 +833,33 @@ const App: React.FC = () => {
           <span className="text-xs text-gray-500 font-bold truncate max-w-[150px]">
             {projectInfo.name}
           </span>
-          <div className="relative inline-flex items-center">
+          <div className="relative inline-flex items-center gap-2">
             {/* 切換平面圖下拉選單 */}
-            <select
-              value={currentPlanIndex}
-              onChange={(e) => {
-                setCurrentPlanIndex(Number(e.target.value));
-              }}
-              className="font-bold text-lg bg-transparent pr-6 outline-none appearance-none truncate max-w-[200px]"
+            <div className="relative inline-flex items-center">
+              <select
+                value={currentPlanIndex}
+                onChange={(e) => {
+                  setCurrentPlanIndex(Number(e.target.value));
+                }}
+                className="font-bold text-lg bg-transparent pr-6 outline-none appearance-none truncate max-w-[200px]"
+              >
+                {projectInfo.floorPlans.map((p, i) => (
+                  <option key={p.id} value={i}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-0 w-4 h-4 pointer-events-none text-gray-500" />
+            </div>
+
+            {/* 新增平面圖按鈕 */}
+            <button
+              onClick={() => setShowAddPlanModal(true)}
+              className="text-blue-600 hover:text-blue-800 transition p-1"
+              title="新增平面圖"
             >
-              {projectInfo.floorPlans.map((p, i) => (
-                <option key={p.id} value={i}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-0 w-4 h-4 pointer-events-none text-gray-500" />
+              <PlusCircle size={24} />
+            </button>
           </div>
         </div>
         
@@ -1040,6 +1073,14 @@ const App: React.FC = () => {
         FLOOR_OPTIONS={FLOOR_OPTIONS}
         NUMBER_OPTIONS={NUMBER_OPTIONS}
         isEditing={!!isEditing}
+      />
+
+      {/* 新增平面圖視窗 */}
+      <AddPlanModal 
+        isOpen={showAddPlanModal}
+        onClose={() => setShowAddPlanModal(false)}
+        onConfirm={handleAddPlanInWorkspace}
+        isPDFLoaded={isPDFLoaded}
       />
 
       {/* 退出確認對話框 */}
