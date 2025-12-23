@@ -51,6 +51,10 @@ const App: React.FC = () => {
   const markTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // 長按判斷用的計時器
   const currentFingerPosRef = useRef<{ clientX: number; clientY: number } | null>(null); // 當前手指位置
 
+  // --- 記憶功能 Refs ---
+  // 用來記憶最後一次輸入的位置描述
+  const lastLocationRef = useRef<string>('');
+
   // --- 放大鏡 (Loupe) 狀態 ---
   const [isTouching, setIsTouching] = useState(false); // 是否正在觸控 (用於顯示放大鏡)
   const [touchPos, setTouchPos] = useState({ x: 0, y: 0 }); // 觸控點在螢幕上的位置
@@ -105,6 +109,16 @@ const App: React.FC = () => {
 
           setProjectInfo({ ...savedProject, floorPlans: restoredPlans });
           setMarkers(savedMarkers);
+          
+          // 如果有舊資料，找出最後一筆新增的紀錄，將其位置描述記下來
+          if (savedMarkers.length > 0) {
+            // 依據 ID (時間戳) 找出最新的一筆
+            const lastMarker = savedMarkers.reduce((prev, current) => (prev.id > current.id) ? prev : current);
+            if (lastMarker && lastMarker.data.location) {
+              lastLocationRef.current = lastMarker.data.location;
+            }
+          }
+
           setStep('workspace'); // 如果有舊資料，直接進入工作區
         }
       } catch (e) {
@@ -421,7 +435,8 @@ const App: React.FC = () => {
     // 重置表單預設值
     setFormData((prev) => ({
       ...prev,
-      location: '',
+      // 使用上一次記憶的位置描述，若無則為空
+      location: lastLocationRef.current,
       surfaceType: '雙面',
       length: '0',
       width: '0',
@@ -473,6 +488,9 @@ const App: React.FC = () => {
     // 寫入 IndexedDB
     await dbService.addMarker(newMarker);
     
+    // 成功儲存後，更新記憶的位置描述
+    lastLocationRef.current = formData.location;
+
     setIsModalOpen(false);
     setActiveMarker(null);
     setMode('move'); // 儲存後切換回移動模式
