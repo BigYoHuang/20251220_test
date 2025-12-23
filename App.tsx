@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Download, ChevronDown, Move, MousePointer2, Save } from 'lucide-react';
+import { Download, ChevronDown, Move, MousePointer2, Save, LogOut } from 'lucide-react';
 import useJSZip from './hooks/useJSZip';
 import dbService from './services/dbService';
 import SetupScreen from './components/SetupScreen';
@@ -63,6 +63,7 @@ const App: React.FC = () => {
   // --- 彈窗 (Modal) 狀態 ---
   const [activeMarker, setActiveMarker] = useState<Partial<Marker> | null>(null); // 當前正在編輯/新增的標記
   const [isModalOpen, setIsModalOpen] = useState(false); // 標記編輯視窗開關
+  const [showExitDialog, setShowExitDialog] = useState(false); // 是否顯示退出確認視窗
   
   // --- 聚合選擇視窗狀態 ---
   const [clusterModalState, setClusterModalState] = useState<{ isOpen: boolean; markers: Marker[] }>({
@@ -505,9 +506,6 @@ const App: React.FC = () => {
       return;
     }
     
-    // 顯示 Loading 或提示
-    const toastId = 'save-toast'; // 若有 Toast 元件可用
-    
     try {
       const zip = new window.JSZip();
       
@@ -648,6 +646,25 @@ const App: React.FC = () => {
       window.location.reload();
     } finally {
       setIsRestoring(false);
+    }
+  };
+
+  // --- 退出專案邏輯 ---
+  const handleExitClick = () => {
+    setShowExitDialog(true);
+  };
+
+  const handleConfirmExit = async (shouldSave: boolean) => {
+    if (shouldSave) {
+      await handleSaveProject();
+      // 給予瀏覽器一點時間處理下載觸發
+      setTimeout(async () => {
+        await dbService.clearAll();
+        window.location.reload();
+      }, 500);
+    } else {
+      await dbService.clearAll();
+      window.location.reload();
     }
   };
 
@@ -833,6 +850,15 @@ const App: React.FC = () => {
             <Download size={18} />
             <span className="hidden sm:inline">匯出</span>
           </button>
+
+          {/* 退出專案按鈕 */}
+          <button
+            onClick={handleExitClick}
+            title="退出專案"
+            className="p-2 bg-gray-100 text-red-500 rounded-lg hover:bg-gray-200 transition active:scale-95"
+          >
+            <LogOut size={20} />
+          </button>
         </div>
       </div>
 
@@ -1011,6 +1037,41 @@ const App: React.FC = () => {
         NUMBER_OPTIONS={NUMBER_OPTIONS}
         isEditing={!!isEditing}
       />
+
+      {/* 退出確認對話框 */}
+      {showExitDialog && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">確認退出</h3>
+            <p className="text-gray-600 mb-6 text-sm">
+              您確定要結束目前的專案嗎？<br />
+              若尚未儲存，所有進度將會遺失。
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => handleConfirmExit(true)}
+                disabled={!isZipLoaded}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md active:scale-95 transition flex items-center justify-center gap-2"
+              >
+                <Save size={18} />
+                儲存專案並退出
+              </button>
+              <button 
+                onClick={() => handleConfirmExit(false)}
+                className="w-full py-3 bg-red-50 text-red-600 rounded-lg font-bold hover:bg-red-100 transition active:scale-95"
+              >
+                不儲存直接退出
+              </button>
+              <button 
+                onClick={() => setShowExitDialog(false)}
+                className="w-full py-3 bg-gray-100 text-gray-600 rounded-lg font-bold hover:bg-gray-200 transition active:scale-95"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
