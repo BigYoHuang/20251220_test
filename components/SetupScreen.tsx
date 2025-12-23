@@ -12,6 +12,8 @@ interface SetupScreenProps {
   onReset: () => void;
 }
 
+// --- 設定頁面元件 ---
+// 這是應用程式的第一個畫面，讓使用者輸入專案名稱並上傳平面圖
 const SetupScreen: React.FC<SetupScreenProps> = ({
   projectInfo,
   setProjectInfo,
@@ -26,6 +28,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
   return (
     <div className="min-h-screen bg-gray-50 p-6 flex flex-col items-center justify-center">
       <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-6 space-y-6 relative">
+        {/* 清除重置按鈕 */}
         <button
           onClick={onReset}
           className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"
@@ -39,6 +42,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
           <p className="text-gray-500 text-sm mt-1">建立專案並匯入圖說</p>
         </div>
 
+        {/* 專案名稱輸入框 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">專案名稱</label>
           <input
@@ -50,6 +54,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
           />
         </div>
 
+        {/* 檔案上傳區塊 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">匯入平面圖</label>
           <div
@@ -71,6 +76,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
           </div>
         </div>
 
+        {/* 已上傳平面圖列表 */}
         <div className="space-y-3 max-h-60 overflow-y-auto">
           {projectInfo.floorPlans.map((plan, idx) => (
             <div key={plan.id} className="flex items-center bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
@@ -93,6 +99,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
           ))}
         </div>
 
+        {/* 開始按鈕 */}
         <button
           onClick={onStart}
           disabled={!projectInfo.name || projectInfo.floorPlans.length === 0}

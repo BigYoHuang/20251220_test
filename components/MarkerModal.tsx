@@ -12,9 +12,11 @@ interface MarkerModalProps {
   onPhotoCapture: (e: React.ChangeEvent<HTMLInputElement>) => void;
   FLOOR_OPTIONS: string[];
   NUMBER_OPTIONS: number[];
-  isEditing?: boolean;
+  isEditing?: boolean; // 判斷是新增還是編輯模式
 }
 
+// --- 標記資料編輯彈窗 ---
+// 提供使用者輸入估價資料、拍攝照片的介面
 const MarkerModal: React.FC<MarkerModalProps> = ({
   isOpen,
   onClose,
@@ -35,7 +37,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
         
-        {/* Header */}
+        {/* 標題列 */}
         <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
           <div className="flex items-center gap-2">
             <div className="bg-yellow-400 border border-red-600 w-8 h-8 flex items-center justify-center font-bold rounded text-sm">
@@ -48,9 +50,9 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
           </button>
         </div>
 
-        {/* Content */}
+        {/* 內容區塊 */}
         <div className="p-5 space-y-5">
-          {/* Photo Capture (Reduced Height) */}
+          {/* 拍照/預覽區塊 */}
           <div
             onClick={() => cameraInputRef.current?.click()}
             className={`w-full h-36 rounded-xl flex items-center justify-center cursor-pointer border-2 transition-all ${
@@ -78,6 +80,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
                 <span className="font-bold text-gray-500">點擊開啟相機</span>
               </div>
             )}
+            {/* 隱藏的檔案輸入框，支援相機 capture */}
             <input
               ref={cameraInputRef}
               type="file"
@@ -88,7 +91,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             />
           </div>
 
-          {/* Form Fields */}
+          {/* 樓層與夾層設定 */}
           <div className="grid grid-cols-[1fr_auto] gap-4">
             <div>
               <label className="text-xs text-gray-500 font-bold block mb-1.5">樓層</label>
@@ -119,6 +122,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             </div>
           </div>
 
+          {/* 位置描述輸入 */}
           <div>
             <label className="text-xs text-gray-500 font-bold block mb-1.5">位置描述</label>
             <input
@@ -130,6 +134,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             />
           </div>
 
+          {/* 管線數量選擇 (Code 1, 2, 3, 4, 6) */}
           <div className="grid grid-cols-5 gap-2">
             {[1, 2, 3, 4, 6].map((num) => (
               <div key={num}>
@@ -149,6 +154,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             ))}
           </div>
 
+          {/* 長寬輸入 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-gray-500 font-bold block mb-1.5">長</label>
@@ -170,7 +176,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             </div>
           </div>
 
-          {/* New Surface Type Toggle (4 options) */}
+          {/* 施作面選擇 (四選一) */}
           <div>
             <label className="text-xs text-gray-500 font-bold block mb-1.5">施作面</label>
             <div className="grid grid-cols-4 gap-2">
@@ -190,6 +196,7 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             </div>
           </div>
 
+          {/* 底部按鈕 */}
           <div className="pt-2 pb-6">
             <button
               onClick={onSave}
