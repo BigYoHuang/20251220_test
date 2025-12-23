@@ -1,17 +1,18 @@
-import React, { useRef } from 'react';
-import { Trash2, ImageIcon, X, FolderOpen } from 'lucide-react';
-import { ProjectInfo } from '../types';
+import React, { useRef, useState } from 'react';
+import { Trash2, ImageIcon, X, FolderOpen, Loader2 } from 'lucide-react';
+import { ProjectInfo, FloorPlan } from '../types';
 
 interface SetupScreenProps {
   projectInfo: ProjectInfo;
   setProjectInfo: React.Dispatch<React.SetStateAction<ProjectInfo>>;
-  onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onFileUpload: (newPlans: FloorPlan[]) => void; // 更新型別定義
   onUpdatePlanName: (idx: number, name: string) => void;
   onRemovePlan: (idx: number) => void;
   onStart: () => void;
   onReset: () => void;
-  onLoadProject: (file: File) => void; // 新增讀取專案的 callback
-  isZipLoaded: boolean; // 判斷是否可以執行讀取
+  onLoadProject: (file: File) => void;
+  isZipLoaded: boolean;
+  isPDFLoaded: boolean; // 傳入 PDF 載入狀態
 }
 
 // --- 設定頁面元件 ---
@@ -26,9 +27,100 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
   onReset,
   onLoadProject,
   isZipLoaded,
+  isPDFLoaded,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const projectInputRef = useRef<HTMLInputElement>(null); // 專案檔讀取 input
+  const projectInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessing, setIsProcessing] = useState(false); // PDF 處理中狀態
+
+  // 處理檔案上傳 (圖片或 PDF)
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const files = Array.from(fileList);
+    const newPlans: FloorPlan[] = [];
+    setIsProcessing(true);
+
+    try {
+      for (const file of files) {
+        if (file.type === 'application/pdf') {
+          // --- 處理 PDF 檔案 ---
+          if (!isPDFLoaded || !window.pdfjsLib) {
+            alert('PDF 模組尚未載入，請稍後再試');
+            continue;
+          }
+
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await window.pdfjsLib.getDocument(arrayBuffer).promise;
+            
+            // 遍歷每一頁
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              // 設定 2倍縮放，確保轉出的圖片夠清晰
+              const scale = 2.0; 
+              const viewport = page.getViewport({ scale });
+              
+              // 建立 Canvas 進行繪製
+              const canvas = document.createElement('canvas');
+              const context = canvas.getContext('2d');
+              canvas.height = viewport.height;
+              canvas.width = viewport.width;
+
+              if (context) {
+                await page.render({
+                  canvasContext: context,
+                  viewport: viewport,
+                }).promise;
+
+                // Canvas 轉 Blob
+                const blob = await new Promise<Blob | null>((resolve) => 
+                  canvas.toBlob(resolve, 'image/jpeg', 0.9)
+                );
+
+                if (blob) {
+                  // 將 Blob 轉為 File 物件
+                  const imgFile = new File([blob], `${file.name}_Page${i}.jpg`, { type: 'image/jpeg' });
+                  newPlans.push({
+                    id: Date.now() + Math.random(),
+                    name: `${file.name.replace('.pdf', '')}_P${i}`,
+                    file: imgFile,
+                    src: URL.createObjectURL(imgFile),
+                  });
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error parsing PDF:', err);
+            alert(`無法讀取 PDF 檔案: ${file.name}`);
+          }
+
+        } else if (file.type.startsWith('image/')) {
+          // --- 處理一般圖片 ---
+          newPlans.push({
+            id: Date.now() + Math.random(),
+            name: file.name.replace(/\.[^/.]+$/, ''),
+            file: file,
+            src: URL.createObjectURL(file),
+          });
+        }
+      }
+
+      // 透過 callback 更新狀態
+      if (newPlans.length > 0) {
+        onFileUpload(newPlans);
+      }
+
+    } catch (e) {
+      console.error(e);
+      alert('檔案處理發生錯誤');
+    } finally {
+      setIsProcessing(false);
+      // 清空 input 讓同檔名可再次選取
+      e.target.value = '';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 flex flex-col items-center justify-center">
@@ -60,12 +152,12 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
           <input
             ref={projectInputRef}
             type="file"
-            accept=".siteproj,.zip" // 支援自訂副檔名或 zip
+            accept=".siteproj,.zip" 
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) onLoadProject(file);
-              e.target.value = ''; // 重置 input 以便重複選取同檔案
+              e.target.value = '';
             }}
           />
         </div>
@@ -86,20 +178,35 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">匯入平面圖</label>
           <div
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition group"
+            onClick={() => !isProcessing && fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition group ${
+               isProcessing 
+                 ? 'border-gray-200 bg-gray-50 cursor-wait' 
+                 : 'border-gray-300 hover:bg-blue-50 hover:border-blue-300'
+            }`}
           >
-            <div className="bg-gray-100 p-3 rounded-full mb-2 group-hover:bg-white transition">
-              <ImageIcon className="w-6 h-6 text-gray-500 group-hover:text-blue-500" />
-            </div>
-            <span className="text-sm font-medium text-gray-600">點擊上傳 JPG/PNG</span>
+            {isProcessing ? (
+              <div className="flex flex-col items-center py-2">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-2" />
+                <span className="text-sm text-gray-500 font-bold">正在處理檔案...</span>
+              </div>
+            ) : (
+              <>
+                <div className="bg-gray-100 p-3 rounded-full mb-2 group-hover:bg-white transition">
+                  <ImageIcon className="w-6 h-6 text-gray-500 group-hover:text-blue-500" />
+                </div>
+                <span className="text-sm font-medium text-gray-600">點擊上傳 JPG/PNG/PDF</span>
+                <span className="text-xs text-gray-400 mt-1">PDF將自動轉換為圖片</span>
+              </>
+            )}
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*"
+              accept="image/*,application/pdf" // 增加 PDF 支援
               className="hidden"
-              onChange={onFileUpload}
+              onChange={handleFileChange}
+              disabled={isProcessing}
             />
           </div>
         </div>
@@ -130,7 +237,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
         {/* 開始按鈕 */}
         <button
           onClick={onStart}
-          disabled={!projectInfo.name || projectInfo.floorPlans.length === 0}
+          disabled={!projectInfo.name || projectInfo.floorPlans.length === 0 || isProcessing}
           className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           開始作業 / 儲存設定

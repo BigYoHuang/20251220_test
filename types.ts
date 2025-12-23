@@ -60,9 +60,10 @@ export interface ImgDimensions {
 }
 
 // --- 全域型別擴充 ---
-// 為了支援透過 CDN 載入的 JSZip
+// 為了支援透過 CDN 載入的 JSZip 與 PDF.js
 declare global {
   interface Window {
     JSZip: any;
+    pdfjsLib: any;
   }
 }

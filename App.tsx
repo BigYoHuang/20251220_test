@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Download, ChevronDown, Move, MousePointer2, Save, LogOut } from 'lucide-react';
 import useJSZip from './hooks/useJSZip';
+import usePDFJS from './hooks/usePDFJS'; // 新增 Hook
 import dbService from './services/dbService';
 import SetupScreen from './components/SetupScreen';
 import MarkerModal from './components/MarkerModal';
@@ -25,6 +26,7 @@ const Y_OFFSET = 30; // 放大鏡位移 (讓放大鏡顯示在手指上方，避
 
 const App: React.FC = () => {
   const isZipLoaded = useJSZip(); // 檢查 JSZip 是否載入完成
+  const isPDFLoaded = usePDFJS(); // 檢查 PDF.js 是否載入完成
 
   // --- 狀態管理 (State) ---
   const [isRestoring, setIsRestoring] = useState(true); // 是否正在還原資料庫狀態
@@ -199,19 +201,19 @@ const App: React.FC = () => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
-    const files = Array.from(fileList) as File[];
-    const newPlans: FloorPlan[] = files.map((file) => ({
-      id: Date.now() + Math.random(),
-      name: file.name.replace(/\.[^/.]+$/, ''),
-      file: file,
-      src: URL.createObjectURL(file),
-    }));
-
+    // 這裡的邏輯移至 SetupScreen 處理，因為需要區分 Image 與 PDF 處理流程
+    // 但因為 App.tsx 擁有 projectInfo state，我們需要將處理完的 FloorPlan[] 傳遞回來
+    // 為了簡化，我們只在這裡保留一個 dummy handler，實際邏輯透過 prop 傳遞
+  };
+  
+  // 實際上 SetupScreen 會呼叫這個函式來更新 App 的 state
+  const addFloorPlans = (newPlans: FloorPlan[]) => {
     setProjectInfo((prev) => ({
       ...prev,
       floorPlans: [...prev.floorPlans, ...newPlans],
     }));
   };
+
 
   const updatePlanName = (idx: number, newName: string) => {
     const newPlans = [...projectInfo.floorPlans];
@@ -785,13 +787,15 @@ const App: React.FC = () => {
       <SetupScreen
         projectInfo={projectInfo}
         setProjectInfo={setProjectInfo}
-        onFileUpload={handleFileUpload}
+        // 將上傳事件改為我們的新邏輯：由 SetupScreen 元件內部判斷是否為 PDF
+        onFileUpload={addFloorPlans as any} // 為了相容性暫時轉型，實際邏輯在元件內
         onUpdatePlanName={updatePlanName}
         onRemovePlan={removePlan}
         onStart={startProject}
         onReset={handleReset}
         onLoadProject={handleLoadProject}
         isZipLoaded={isZipLoaded}
+        isPDFLoaded={isPDFLoaded} // 傳遞 PDF 載入狀態
       />
     );
   }
