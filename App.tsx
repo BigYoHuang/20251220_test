@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Download, ChevronDown, Move, MousePointer2 } from 'lucide-react';
+import { Download, ChevronDown, Move, MousePointer2, Save } from 'lucide-react';
 import useJSZip from './hooks/useJSZip';
 import dbService from './services/dbService';
 import SetupScreen from './components/SetupScreen';
@@ -496,7 +496,163 @@ const App: React.FC = () => {
     setMode('move'); // 儲存後切換回移動模式
   };
 
-  // --- 匯出邏輯 ---
+  // --- 專案檔案處理 (Saving / Loading) ---
+
+  // 1. 儲存專案 (Save Project) -> .siteproj
+  const handleSaveProject = async () => {
+    if (!window.JSZip) {
+      alert('系統模組載入中，請稍候');
+      return;
+    }
+    
+    // 顯示 Loading 或提示
+    const toastId = 'save-toast'; // 若有 Toast 元件可用
+    
+    try {
+      const zip = new window.JSZip();
+      
+      // 準備中繼資料 (不含 blob/file)
+      // 平面圖資訊
+      const floorPlansMeta = projectInfo.floorPlans.map(p => ({
+        id: p.id,
+        name: p.name,
+        // file 與 src 不存入 JSON，改用參照
+        fileName: `plans/${p.id}.png` // 假設都轉存為 png 或原檔
+      }));
+
+      // 標記資料
+      const markersMeta = markers.map(m => ({
+        ...m,
+        imageBlob: null, // 移除 Blob
+        imageFileName: `markers/${m.id}.jpg`
+      }));
+
+      const projectMeta = {
+        name: projectInfo.name,
+        floorPlans: floorPlansMeta,
+        markers: markersMeta,
+        version: "1.0"
+      };
+
+      // 寫入 JSON
+      zip.file("data.json", JSON.stringify(projectMeta));
+
+      // 寫入平面圖檔案
+      const assetsFolder = zip.folder("assets");
+      const plansFolder = assetsFolder?.folder("plans");
+      const markersFolder = assetsFolder?.folder("markers");
+
+      // 批次加入平面圖
+      projectInfo.floorPlans.forEach(p => {
+        // 使用原檔名副檔名或預設png，這裡簡單起見直接存入 Blob
+        plansFolder?.file(`${p.id}.png`, p.file);
+      });
+
+      // 批次加入標記照片
+      markers.forEach(m => {
+        markersFolder?.file(`${m.id}.jpg`, m.imageBlob);
+      });
+
+      // 產生 ZIP Blob
+      const content = await zip.generateAsync({ type: 'blob' });
+      
+      // 下載
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(content);
+      link.download = `${projectInfo.name || 'Project'}.siteproj`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+    } catch (error) {
+      console.error(error);
+      alert('儲存專案失敗，請檢查記憶體空間');
+    }
+  };
+
+  // 2. 開啟專案 (Open Project)
+  const handleLoadProject = async (file: File) => {
+    if (!window.JSZip) return;
+    
+    setIsRestoring(true);
+    try {
+      const zip = await new window.JSZip().loadAsync(file);
+      
+      // 讀取 JSON
+      const jsonText = await zip.file("data.json")?.async("text");
+      if (!jsonText) throw new Error("Invalid project file: missing data.json");
+      
+      const meta = JSON.parse(jsonText);
+      
+      // 先清除當前資料庫 (避免 ID 衝突混淆)
+      await dbService.clearAll();
+
+      // 還原平面圖
+      const newPlans: FloorPlan[] = [];
+      if (meta.floorPlans) {
+        for (const pMeta of meta.floorPlans) {
+          // 讀取檔案
+          const blob = await zip.file(`assets/${pMeta.fileName}`)?.async("blob");
+          if (blob) {
+             const fileObj = new File([blob], pMeta.name, { type: blob.type });
+             newPlans.push({
+               id: pMeta.id,
+               name: pMeta.name,
+               file: fileObj,
+               src: URL.createObjectURL(fileObj)
+             });
+          }
+        }
+      }
+
+      // 還原標記
+      const newMarkers: Marker[] = [];
+      if (meta.markers) {
+         for (const mMeta of meta.markers) {
+            const blob = await zip.file(`assets/${mMeta.imageFileName}`)?.async("blob");
+            if (blob) {
+              const fileObj = new File([blob], `marker_${mMeta.id}.jpg`, { type: 'image/jpeg' });
+              // 移除 JSON 中不必要的欄位並補回 Blob
+              const { imageFileName, imageBlob, ...rest } = mMeta;
+              newMarkers.push({
+                ...rest,
+                imageBlob: fileObj
+              });
+            }
+         }
+      }
+
+      const newProjectInfo: ProjectInfo = {
+        name: meta.name,
+        floorPlans: newPlans
+      };
+
+      // 存入 IndexedDB
+      await dbService.saveProject(newProjectInfo);
+      for (const m of newMarkers) {
+        await dbService.addMarker(m);
+      }
+
+      // 更新 State
+      setProjectInfo(newProjectInfo);
+      setMarkers(newMarkers);
+      setStep('workspace');
+      setCurrentPlanIndex(0);
+
+      alert(`專案 ${meta.name} 讀取成功！`);
+
+    } catch (e) {
+      console.error(e);
+      alert('讀取失敗：檔案格式錯誤或損毀');
+      // 如果失敗，嘗試重新載入目前 DB 狀態 (雖然已經被 clear 了，這裡通常建議 reload)
+      window.location.reload();
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+
+  // --- 匯出報告 (Export Report) ---
   // 產生匯出檔名格式
   const getMarkerFileName = (m: Marker) => {
     const d = m.data;
@@ -589,22 +745,12 @@ const App: React.FC = () => {
     const content = await zip.generateAsync({ type: 'blob' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(content);
-    link.download = `${folderName}_Export.zip`;
+    link.download = `${folderName}_Report.zip`; // 區別於 .siteproj
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    // 4. 匯出完成後詢問是否清除資料
-    setTimeout(async () => {
-      if (
-        confirm(
-          '匯出成功！是否要清除暫存資料並結束此專案？(若還需要繼續編輯請按取消)'
-        )
-      ) {
-        await dbService.clearAll();
-        window.location.reload();
-      }
-    }, 500);
+    
+    // 匯出報告不自動清除資料，因為使用者可能要繼續存檔
   };
 
   // --- 畫面渲染 ---
@@ -627,6 +773,8 @@ const App: React.FC = () => {
         onRemovePlan={removePlan}
         onStart={startProject}
         onReset={handleReset}
+        onLoadProject={handleLoadProject}
+        isZipLoaded={isZipLoaded}
       />
     );
   }
@@ -660,17 +808,32 @@ const App: React.FC = () => {
             <ChevronDown className="absolute right-0 w-4 h-4 pointer-events-none text-gray-500" />
           </div>
         </div>
-        {/* 匯出按鈕 */}
-        <button
-          onClick={handleExport}
-          disabled={!isZipLoaded}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold shadow-sm active:scale-95 transition ${
-            isZipLoaded ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500'
-          }`}
-        >
-          <Download size={18} />
-          <span>匯出</span>
-        </button>
+        
+        {/* 按鈕群組 */}
+        <div className="flex items-center gap-2">
+          {/* 儲存專案按鈕 */}
+          <button
+             onClick={handleSaveProject}
+             disabled={!isZipLoaded}
+             title="儲存專案檔 (.siteproj)"
+             className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition active:scale-95"
+          >
+            <Save size={20} />
+          </button>
+
+          {/* 匯出報告按鈕 */}
+          <button
+            onClick={handleExport}
+            disabled={!isZipLoaded}
+            title="匯出照片與報表"
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold shadow-sm active:scale-95 transition ${
+              isZipLoaded ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500'
+            }`}
+          >
+            <Download size={18} />
+            <span className="hidden sm:inline">匯出</span>
+          </button>
+        </div>
       </div>
 
       {/* 畫布區域 */}

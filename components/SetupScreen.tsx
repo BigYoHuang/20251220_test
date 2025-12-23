@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Trash2, ImageIcon, X } from 'lucide-react';
+import { Trash2, ImageIcon, X, FolderOpen } from 'lucide-react';
 import { ProjectInfo } from '../types';
 
 interface SetupScreenProps {
@@ -10,6 +10,8 @@ interface SetupScreenProps {
   onRemovePlan: (idx: number) => void;
   onStart: () => void;
   onReset: () => void;
+  onLoadProject: (file: File) => void; // 新增讀取專案的 callback
+  isZipLoaded: boolean; // 判斷是否可以執行讀取
 }
 
 // --- 設定頁面元件 ---
@@ -22,8 +24,11 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
   onRemovePlan,
   onStart,
   onReset,
+  onLoadProject,
+  isZipLoaded,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectInputRef = useRef<HTMLInputElement>(null); // 專案檔讀取 input
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 flex flex-col items-center justify-center">
@@ -39,12 +44,35 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
 
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-800">工地現場紀錄</h1>
-          <p className="text-gray-500 text-sm mt-1">建立專案並匯入圖說</p>
+          <p className="text-gray-500 text-sm mt-1">建立新專案 或 開啟舊專案</p>
+        </div>
+
+        {/* 開啟舊專案按鈕 */}
+        <div className="pb-4 border-b border-gray-100">
+          <button
+            onClick={() => projectInputRef.current?.click()}
+            disabled={!isZipLoaded}
+            className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-200 transition disabled:opacity-50"
+          >
+            <FolderOpen size={20} />
+            <span>開啟專案檔 (.siteproj)</span>
+          </button>
+          <input
+            ref={projectInputRef}
+            type="file"
+            accept=".siteproj,.zip" // 支援自訂副檔名或 zip
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onLoadProject(file);
+              e.target.value = ''; // 重置 input 以便重複選取同檔案
+            }}
+          />
         </div>
 
         {/* 專案名稱輸入框 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">專案名稱</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">專案名稱 (新專案)</label>
           <input
             type="text"
             className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
