@@ -171,6 +171,7 @@ const AddPlanModal: React.FC<AddPlanModalProps> = ({
                   <div className="flex-1">
                     <input
                       value={plan.name}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => handleNameChange(idx, e.target.value)}
                       className="w-full text-sm font-bold text-gray-800 border-b border-transparent focus:border-blue-500 outline-none bg-transparent"
                       placeholder="輸入圖說名稱"
