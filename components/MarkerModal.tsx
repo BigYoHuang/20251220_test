@@ -170,15 +170,15 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             </div>
           </div>
 
-          {/* New Surface Type Toggle */}
+          {/* New Surface Type Toggle (4 options) */}
           <div>
             <label className="text-xs text-gray-500 font-bold block mb-1.5">施作面</label>
-            <div className="grid grid-cols-3 gap-2">
-              {['雙面', '腳踩面', '倒吊面'].map((type) => (
+            <div className="grid grid-cols-4 gap-2">
+              {['單面', '雙面', '腳踩面', '倒吊面'].map((type) => (
                 <button
                   key={type}
                   onClick={() => setFormData({ ...formData, surfaceType: type })}
-                  className={`py-3 rounded-lg font-bold text-sm transition-all border ${
+                  className={`py-3 rounded-lg font-bold text-xs sm:text-sm transition-all border ${
                     formData.surfaceType === type
                       ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                       : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
