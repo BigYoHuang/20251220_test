@@ -35,6 +35,25 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
 
   const PIPES = [1, 2, 3, 4, 6];
 
+  // 處理互斥按鈕邏輯
+  const toggleIncomplete = () => {
+    setFormData((prev) => ({
+      ...prev,
+      isIncomplete: !prev.isIncomplete,
+      // 如果開啟了"不完整"，強制關閉"無防火帶"
+      noFireBarrier: !prev.isIncomplete ? false : prev.noFireBarrier,
+    }));
+  };
+
+  const toggleNoFireBarrier = () => {
+    setFormData((prev) => ({
+      ...prev,
+      noFireBarrier: !prev.noFireBarrier,
+      // 如果開啟了"無防火帶"，強制關閉"不完整"
+      isIncomplete: !prev.noFireBarrier ? false : prev.isIncomplete,
+    }));
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
@@ -222,6 +241,30 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 不完整 / 無防火帶 互斥按鈕 */}
+          <div className="grid grid-cols-2 gap-4 mt-2">
+            <button
+              onClick={toggleIncomplete}
+              className={`py-3 rounded-lg font-bold text-sm transition-all border ${
+                formData.isIncomplete
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              不完整
+            </button>
+            <button
+              onClick={toggleNoFireBarrier}
+              className={`py-3 rounded-lg font-bold text-sm transition-all border ${
+                formData.noFireBarrier
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              無防火帶
+            </button>
           </div>
 
           {/* 底部按鈕 */}

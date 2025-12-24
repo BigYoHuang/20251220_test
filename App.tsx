@@ -81,6 +81,8 @@ const App: React.FC = () => {
     isMezzanine: false,
     location: '',
     surfaceType: '雙面',
+    isIncomplete: false, // 預設關閉
+    noFireBarrier: false, // 預設關閉
     metal1: '0', metal2: '0', metal3: '0', metal4: '0', metal6: '0',
     pvc1: '0', pvc2: '0', pvc3: '0', pvc4: '0', pvc6: '0',
     length: '0',
@@ -460,6 +462,8 @@ const App: React.FC = () => {
       // 使用上一次記憶的位置描述，若無則為空
       location: lastLocationRef.current,
       surfaceType: '雙面',
+      isIncomplete: false, // 重置狀態
+      noFireBarrier: false, // 重置狀態
       metal1: '0', metal2: '0', metal3: '0', metal4: '0', metal6: '0',
       pvc1: '0', pvc2: '0', pvc3: '0', pvc4: '0', pvc6: '0',
       length: '0',
@@ -697,11 +701,15 @@ const App: React.FC = () => {
     floorStr += 'F';
     const seqStr = String(m.seq).padStart(3, '0');
     
-    // 檔名格式: 序號_樓層_位置_金屬1...金屬6_PVC1...PVC6_長_寬_工法
+    // 檔名格式: 序號_樓層_位置_金屬1...金屬6_PVC1...PVC6_長_寬_工法_不完整_無防火帶
     const metalPart = `${d.metal1 || 0}_${d.metal2 || 0}_${d.metal3 || 0}_${d.metal4 || 0}_${d.metal6 || 0}`;
     const pvcPart = `${d.pvc1 || 0}_${d.pvc2 || 0}_${d.pvc3 || 0}_${d.pvc4 || 0}_${d.pvc6 || 0}`;
     
-    return `${seqStr}_${floorStr}_${d.location}_${metalPart}_${pvcPart}_${d.length}_${d.width}_${d.surfaceType}`;
+    // 狀態後綴
+    const incompleteFlag = d.isIncomplete ? '1' : '0';
+    const noFireBarrierFlag = d.noFireBarrier ? '1' : '0';
+
+    return `${seqStr}_${floorStr}_${d.location}_${metalPart}_${pvcPart}_${d.length}_${d.width}_${d.surfaceType}_${incompleteFlag}_${noFireBarrierFlag}`;
   };
 
   const handleExport = async () => {

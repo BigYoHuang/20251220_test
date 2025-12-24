@@ -38,7 +38,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
-    const files = Array.from(fileList);
+    const files: File[] = Array.from(fileList);
     const newPlans: FloorPlan[] = [];
     setIsProcessing(true);
 

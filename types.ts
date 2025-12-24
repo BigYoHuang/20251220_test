@@ -23,6 +23,10 @@ export interface MarkerData {
   location: string;     // 位置描述 (例如: 主臥廁所)
   surfaceType: string;  // 施作面 (單面, 雙面, 腳踩面, 倒吊面)
   
+  // 特殊狀態 (互斥開關)
+  isIncomplete: boolean; // 不完整
+  noFireBarrier: boolean; // 無防火帶
+
   // 金屬管數量
   metal1: string;       // 1英吋
   metal2: string;       // 2英吋
