@@ -22,11 +22,21 @@ export interface MarkerData {
   isMezzanine: boolean; // 是否為夾層
   location: string;     // 位置描述 (例如: 主臥廁所)
   surfaceType: string;  // 施作面 (單面, 雙面, 腳踩面, 倒吊面)
-  code1: string;        // 1英吋管線數量
-  code2: string;        // 2英吋管線數量
-  code3: string;        // 3英吋管線數量
-  code4: string;        // 4英吋管線數量
-  code6: string;        // 6英吋管線數量
+  
+  // 金屬管數量
+  metal1: string;       // 1英吋
+  metal2: string;       // 2英吋
+  metal3: string;       // 3英吋
+  metal4: string;       // 4英吋
+  metal6: string;       // 6英吋
+
+  // PVC管數量
+  pvc1: string;         // 1英吋
+  pvc2: string;         // 2英吋
+  pvc3: string;         // 3英吋
+  pvc4: string;         // 4英吋
+  pvc6: string;         // 6英吋
+
   length: string;       // 開口長度
   width: string;        // 開口寬度
   tempImage: File | null; // 暫存的現場照片檔案

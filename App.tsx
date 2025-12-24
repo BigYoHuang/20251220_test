@@ -81,11 +81,8 @@ const App: React.FC = () => {
     isMezzanine: false,
     location: '',
     surfaceType: '雙面',
-    code1: '0',
-    code2: '0',
-    code3: '0',
-    code4: '0',
-    code6: '0',
+    metal1: '0', metal2: '0', metal3: '0', metal4: '0', metal6: '0',
+    pvc1: '0', pvc2: '0', pvc3: '0', pvc4: '0', pvc6: '0',
     length: '0',
     width: '0',
     tempImage: null,
@@ -463,13 +460,11 @@ const App: React.FC = () => {
       // 使用上一次記憶的位置描述，若無則為空
       location: lastLocationRef.current,
       surfaceType: '雙面',
+      metal1: '0', metal2: '0', metal3: '0', metal4: '0', metal6: '0',
+      pvc1: '0', pvc2: '0', pvc3: '0', pvc4: '0', pvc6: '0',
       length: '0',
       width: '0',
-      code1: '0',
-      code2: '0',
-      code3: '0',
-      code4: '0',
-      code6: '0',
+      code1: '0', code2: '0', code3: '0', code4: '0', code6: '0', // 兼容舊欄位，雖不再使用但避免型別錯誤
       tempImage: null,
     }));
 
@@ -701,8 +696,12 @@ const App: React.FC = () => {
     if (d.isMezzanine) floorStr = `${d.floor}M`;
     floorStr += 'F';
     const seqStr = String(m.seq).padStart(3, '0');
-    // 檔名格式: 序號_樓層_位置_管線數量..._施作面
-    return `${seqStr}_${floorStr}_${d.location}_${d.code1}_${d.code2}_${d.code3}_${d.code4}_${d.code6}_${d.length}_${d.width}_${d.surfaceType}`;
+    
+    // 檔名格式: 序號_樓層_位置_金屬1...金屬6_PVC1...PVC6_長_寬_工法
+    const metalPart = `${d.metal1 || 0}_${d.metal2 || 0}_${d.metal3 || 0}_${d.metal4 || 0}_${d.metal6 || 0}`;
+    const pvcPart = `${d.pvc1 || 0}_${d.pvc2 || 0}_${d.pvc3 || 0}_${d.pvc4 || 0}_${d.pvc6 || 0}`;
+    
+    return `${seqStr}_${floorStr}_${d.location}_${metalPart}_${pvcPart}_${d.length}_${d.width}_${d.surfaceType}`;
   };
 
   const handleExport = async () => {

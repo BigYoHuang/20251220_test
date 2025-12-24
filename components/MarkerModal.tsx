@@ -33,6 +33,8 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
 
   if (!isOpen) return null;
 
+  const PIPES = [1, 2, 3, 4, 6];
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
@@ -134,24 +136,50 @@ const MarkerModal: React.FC<MarkerModalProps> = ({
             />
           </div>
 
-          {/* 管線數量選擇 (Code 1, 2, 3, 4, 6) */}
-          <div className="grid grid-cols-5 gap-2">
-            {[1, 2, 3, 4, 6].map((num) => (
-              <div key={num}>
-                <label className="text-[10px] text-center text-gray-500 font-bold block mb-1">{num}"</label>
-                <select
-                  value={(formData as any)[`code${num}`]}
-                  onChange={(e) => setFormData({ ...formData, [`code${num}`]: e.target.value })}
-                  className="w-full border-gray-300 border p-1.5 rounded bg-white text-sm text-center focus:border-blue-500 outline-none"
-                >
-                  {NUMBER_OPTIONS.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+          {/* 金屬管數量選擇 */}
+          <div className="space-y-2">
+            <span className="text-xs text-gray-500 font-bold block">金屬管</span>
+            <div className="grid grid-cols-5 gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
+              {PIPES.map((num) => (
+                <div key={`metal-${num}`}>
+                  <label className="text-[10px] text-center text-gray-400 font-bold block mb-1">{num}"</label>
+                  <select
+                    value={(formData as any)[`metal${num}`]}
+                    onChange={(e) => setFormData({ ...formData, [`metal${num}`]: e.target.value })}
+                    className="w-full border-gray-300 border p-1.5 rounded bg-white text-sm text-center focus:border-blue-500 outline-none"
+                  >
+                    {NUMBER_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* PVC管數量選擇 */}
+          <div className="space-y-2">
+            <span className="text-xs text-gray-500 font-bold block">PVC管</span>
+            <div className="grid grid-cols-5 gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
+              {PIPES.map((num) => (
+                <div key={`pvc-${num}`}>
+                  <label className="text-[10px] text-center text-gray-400 font-bold block mb-1">{num}"</label>
+                  <select
+                    value={(formData as any)[`pvc${num}`]}
+                    onChange={(e) => setFormData({ ...formData, [`pvc${num}`]: e.target.value })}
+                    className="w-full border-gray-300 border p-1.5 rounded bg-white text-sm text-center focus:border-blue-500 outline-none"
+                  >
+                    {NUMBER_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* 長寬輸入 */}
