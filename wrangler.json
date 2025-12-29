@@ -1,0 +1,10 @@
+{
+  "name": "site-photo-logger",
+  "compatibility_date": "2024-11-12",
+  "assets": {
+    "directory": "./dist"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
